@@ -86,6 +86,8 @@ def get_LeNet(X):
     logits = tf.matmul(fc2, fc3_W) + fc3_b
 
     return logits
+
+
 if __name__ == "__main__":
     # Input definitions
     x = tf.placeholder(tf.float32, (None, 32, 32, 1))

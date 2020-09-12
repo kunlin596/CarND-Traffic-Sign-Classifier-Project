@@ -24,16 +24,16 @@ class LeNet(object):
         conv1_W = tf.Variable(tf.truncated_normal(shape=(5, 5, 3, num_filter1), mean=mean, stddev=stddev))
         conv1_b = tf.Variable(tf.zeros(num_filter1))
         self._conv1 = tf.nn.conv2d(X, conv1_W, strides=(1, 1, 1, 1), padding='VALID') + conv1_b
-        self._conv1 = tf.nn.max_pool(self._conv1, ksize=[1, 2, 2, 1], strides=(1, 2, 2, 1), padding='VALID')
         self._conv1 = tf.nn.relu(self._conv1)
+        self._conv1 = tf.nn.max_pool(self._conv1, ksize=[1, 2, 2, 1], strides=(1, 2, 2, 1), padding='VALID')
 
         # Convolution layer 2
         num_filter2 = 16
         conv2_W = tf.Variable(tf.truncated_normal(shape=[5, 5, num_filter1, num_filter2], mean=mean, stddev=stddev))
         conv2_b = tf.Variable(tf.zeros(num_filter2))
         self._conv2 = tf.nn.conv2d(self._conv1, conv2_W, strides=[1, 1, 1, 1], padding='VALID') + conv2_b
-        self._conv2 = tf.nn.max_pool(self._conv2, ksize=[1, 2, 2, 1], strides=(1, 2, 2, 1), padding='VALID')
         self._conv2 = tf.nn.relu(self._conv2)
+        self._conv2 = tf.nn.max_pool(self._conv2, ksize=[1, 2, 2, 1], strides=(1, 2, 2, 1), padding='VALID')
 
         self._fc0 = flatten(self._conv2)
 
