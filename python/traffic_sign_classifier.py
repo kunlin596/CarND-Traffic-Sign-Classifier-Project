@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import tensorflow as tf
-from tensorflow.contrib.layers import flatten
+import tensorflow
+import tensorflow.compat.v1 as tf
 import pickle
 import os
 import sys
@@ -49,7 +49,7 @@ def test(data, net):
     return accuracies
 
 
-def _analyze_training_date(X, y):
+def _analyze_training_data(X, y):
     num_labels = y.ptp() + 1 - y.min()
     all_cnt = np.zeros(num_labels, dtype=np.uint32)
     for label in np.arange(y.min(), y.max() + 1):
@@ -68,8 +68,8 @@ def _run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
 
     image_shape = X_train[0].shape
 
-    X_var = tf.placeholder(tf.float32, (None, *image_shape))
-    y_var = tf.placeholder(tf.int32, (None))
+    X_var = tf.placeholder(tf.float32, shape=(None, *image_shape))
+    y_var = tf.placeholder(tf.int32, shape=(None))
 
     all_cnt = np.zeros(num_labels, dtype=np.uint32)
     for label in np.arange(y_train.min(), y_train.max() + 1):
@@ -77,6 +77,7 @@ def _run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
     _analyze_training_data(X_train, y_train)
 
     net = net_cls(X_var, y_var, num_labels)
+
     embed()
 
     # Train
@@ -109,6 +110,7 @@ def _run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
 
 if __name__ == "__main__":
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+    tf.disable_v2_behavior()
     parser = argparse.ArgumentParser()
     parser.add_argument('--nepochs', type=int, dest='nepochs', default=10)
     parser.add_argument('--learn-rate', type=float, dest='learn_rate', default=0.001)

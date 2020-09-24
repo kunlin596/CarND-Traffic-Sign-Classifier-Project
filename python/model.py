@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+import tensorflow
 import tensorflow.compat.v1 as tf
-from tensorflow.contrib.layers import flatten
+from IPython import embed
 
 class Net(object):
     ''' CNN base
@@ -117,7 +118,7 @@ class LeNet5(Net):
     def init_structure(self):
         self._conv1, conv1_W = self._create_conv_layer(self._X, num_output_features=6, ksize=5, strides=1, name='conv1')
         self._conv2, conv2_W = self._create_conv_layer(self._conv1, num_output_features=16, ksize=5, strides=1, name='conv2')
-        self._fc0 = flatten(self._conv2)
+        self._fc0 = tf.layers.Flatten()(self._conv2)
         self._fc1, fc1_W = self._create_full_connected_layer(self._fc0, 120, 'fc1')
         self._fc1 = tf.nn.relu(self._fc1)
         self._fc2, fc2_W = self._create_full_connected_layer(self._fc1, 84, 'fc2')
@@ -152,7 +153,7 @@ class MyNet(Net):
         self._conv2, conv2_W = self._create_conv_layer(self._conv1, num_output_features=64, ksize=3, strides=1, name='conv2')
         self._conv3, conv3_W = self._create_conv_layer(self._conv2, num_output_features=128, ksize=3, strides=1, name='conv3')
 
-        self._fc0 = flatten(self._conv3)
+        self._fc0 = tf.layers.Flatten()(self._conv3)
 
         self._fc1, fc1_W = self._create_full_connected_layer(self._fc0, 120, 'fc1')
         self._fc1 = tf.nn.relu(self._fc1)
