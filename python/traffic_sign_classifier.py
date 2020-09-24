@@ -23,9 +23,17 @@ def read_data(datadir):
     return data
 
 
+def batch_normalization(X):
+    from utils import rgb2gray, normalization
+    X = rgb2gray(X)
+    X = normalization(X)
+    return X
+
+
 def test(data, net):
-    X_test = data['test']['features']
+    X_test = batch_normalization(data['test']['features'])
     y_test = data['test']['labels']
+    accuracies = []
     with tf.Session() as session:
         net.load(session)
         import prettytable
@@ -35,16 +43,25 @@ def test(data, net):
             X_valid = X_test[bool_y_label]
             y_valid = y_test[bool_y_label]
             accuracy = net(session, X_valid, y_valid, 1, len(y_valid)) 
-            result_table.add_row([i, len(y_valid), np.round(accuracy, 6)])
+            result_table.add_row([i, len(y_valid), np.round(accuracy, 3)])
+            accuracies.append(accuracy)
         print(result_table)
+    return accuracies
 
 
-def run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
+def _analyze_training_date(X, y):
+    num_labels = y.ptp() + 1 - y.min()
+    all_cnt = np.zeros(num_labels, dtype=np.uint32)
+    for label in np.arange(y.min(), y.max() + 1):
+        all_cnt[label] = np.count_nonzero(y== label)
 
-    X_train = data['train']['features']
+
+def _run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
+
+    X_train = batch_normalization(data['train']['features'])
     y_train = data['train']['labels']
 
-    X_validation = data['valid']['features']
+    X_validation = batch_normalization(data['valid']['features'])
     y_validation = data['valid']['labels']
 
     num_labels = y_train.ptp() + 1 - y_train.min()
@@ -54,8 +71,12 @@ def run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
     X_var = tf.placeholder(tf.float32, (None, *image_shape))
     y_var = tf.placeholder(tf.int32, (None))
 
-    net = net_cls(X_var, y_var, num_labels)
+    all_cnt = np.zeros(num_labels, dtype=np.uint32)
+    for label in np.arange(y_train.min(), y_train.max() + 1):
+        all_cnt[label] = np.count_nonzero(y_train == label)
+    _analyze_training_data(X_train, y_train)
 
+    net = net_cls(X_var, y_var, num_labels)
     embed()
 
     # Train
@@ -97,4 +118,4 @@ if __name__ == "__main__":
     options = parser.parse_args()
 
     data = read_data(os.path.join(os.getcwd(), 'traffic_data'))
-    run(data, getattr(sys.modules['model'], options.model), options.nepochs, options.learn_rate, options.batch_size)
+    _run(data, getattr(sys.modules['model'], options.model), options.nepochs, options.learn_rate, options.batch_size)
