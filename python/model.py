@@ -26,7 +26,7 @@ class Net(object):
         self._mean = mean
         self._stddev = stddev
         self._learn_rate = 0.001
-        self._dropout = tf.placeholder(tf.float32, name='dropout')
+        self._dropout = tf.placeholder(tf.float32, name='dropout')  # dropout rate
         self.init_structure()
 
     def init_structure(self):
@@ -35,27 +35,25 @@ class Net(object):
     def _get_initialized_var(self, shape):
         return tf.truncated_normal(shape=shape, mean=self._mean, stddev=self._stddev)
 
-    def _get_conv2d(self, X, W, b, strides=1, padding='VALID'):
-        return tf.nn.conv2d(X, W, strides=[1, strides, strides, 1], padding=padding) + b
-
-    def _get_conv2d_kernel(self, ksize, input_size, output_size):
-        W = tf.Variable(self._get_initialized_var((ksize, ksize, input_size, output_size)))
-        b = tf.Variable(tf.zeros(output_size))
-        return W, b
-
-    def _create_conv_layer(self, input_var, num_output_features, ksize, strides, name):
+    def _create_conv_layer(self, input_var, num_output_features, ksize, strides, name, use_subsample=True):
         num_input_features = input_var.shape[-1].value
-        conv_W, conv_b = self._get_conv2d_kernel(ksize, num_input_features, num_output_features)
-        conv = self._get_conv2d(input_var, conv_W, conv_b, strides=strides)
+
+        conv_W = tf.Variable(self._get_initialized_var(shape=(ksize, ksize, num_input_features, num_output_features)))
+        conv_b = tf.Variable(tf.zeros(num_output_features))
+
+        conv = tf.nn.conv2d(input_var, conv_W, strides=[1, strides, strides, 1], padding='VALID') + conv_b
         conv = tf.nn.relu(conv)
-        conv = tf.nn.max_pool(conv, ksize=[1, 2, 2, 1], strides=(1, 2, 2, 1), padding='VALID', name=name)
+        print('shape=%s before max_pool' % (conv.shape))
+        if use_subsample:
+            conv = tf.nn.max_pool(conv, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1), padding='VALID', name=name)
+
         return conv, conv_W
 
     def _create_full_connected_layer(self, input_var, num_output, name):
         num_input = input_var.shape[-1].value
         fc_W = tf.Variable(self._get_initialized_var(shape=(num_input, num_output)), name=name + '_W')
         fc_b = tf.Variable(tf.zeros(num_output), name=name + '_b')
-        fc = tf.matmul(input_var, fc_W) + fc_b
+        fc = tf.nn.xw_plus_b(input_var, fc_W, fc_b)
         return fc, fc_W
 
     @property
@@ -138,7 +136,7 @@ class LeNet5(Net):
         self._correct_prediction = tf.equal(tf.argmax(self._logits, 1), tf.argmax(self._one_hot_y, 1))
         self._accuracy_operation = tf.reduce_mean(tf.cast(self._correct_prediction, tf.float32))
         self._saver = tf.train.Saver()
-    
+
     def __repr__(self):
         return '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' % (self._X, self._conv1, self._conv2, self._fc0, self._fc1, self._fc2, self._fc3)
 
@@ -149,43 +147,43 @@ class MyNet(Net):
         return 'MyNet'
 
     def init_structure(self):
-        self._conv1, conv1_W = self._create_conv_layer(self._X, num_output_features=32, ksize=3, strides=1, name='conv1')
-        self._conv2, conv2_W = self._create_conv_layer(self._conv1, num_output_features=64, ksize=3, strides=1, name='conv2')
-        self._conv3, conv3_W = self._create_conv_layer(self._conv2, num_output_features=128, ksize=3, strides=1, name='conv3')
+        #
+        # Net definition
+        #
+        self._conv1, conv1_W = self._create_conv_layer(self._X, num_output_features=6, ksize=5, strides=1, name='conv1')
+        self._conv2, conv2_W = self._create_conv_layer(self._conv1, num_output_features=16, ksize=5, strides=1, name='conv2')
+        self._conv3, conv3_W = self._create_conv_layer(self._conv2, num_output_features=400, ksize=5, strides=1, name='conv3', use_subsample=False)
 
-        self._fc0 = tf.layers.Flatten()(self._conv3)
+        self._fc0 = tf.concat([tf.layers.Flatten()(self._conv2), tf.layers.Flatten()(self._conv3)], 1)
+        self._fc0 = tf.nn.dropout(self._fc0, keep_prob=self._dropout)
 
-        self._fc1, fc1_W = self._create_full_connected_layer(self._fc0, 120, 'fc1')
-        self._fc1 = tf.nn.relu(self._fc1)
-        self._fc1 = tf.nn.dropout(self._fc1, keep_prob=self._dropout)
+        self._fc1, fc1_W = self._create_full_connected_layer(self._fc0, self._num_labels, name='fc1')
 
-        self._fc2, fc2_W = self._create_full_connected_layer(self._fc1, 84, 'fc2')
-        self._fc2 = tf.nn.relu(self._fc2)
-        self._fc2 = tf.nn.dropout(self._fc2, keep_prob=self._dropout)
+        self._logits = self._fc1
 
-        self._fc3, fc3_W = self._create_full_connected_layer(self._fc2, self._num_labels, 'fc3')
-
-        self._logits = self._fc3
-
-        self._optimizer = tf.train.AdamOptimizer(learning_rate=self._learn_rate)
-        # Convert logits int0 proper probablity expression
-        self._cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=self._one_hot_y, logits=self._logits)
-
+        #
+        # Training pipeline
+        #
         beta = 0.0001
         # Add all weights to regularization term
         reg_term = tf.nn.l2_loss(conv1_W) + \
                    tf.nn.l2_loss(conv2_W) + \
                    tf.nn.l2_loss(conv3_W) + \
-                   tf.nn.l2_loss(fc1_W) + \
-                   tf.nn.l2_loss(fc2_W) + \
-                   tf.nn.l2_loss(fc3_W)
+                   tf.nn.l2_loss(fc1_W)
+
+        # Convert logits into proper probablity expression
+        self._optimizer = tf.train.AdamOptimizer(learning_rate=self._learn_rate)
+        self._cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=self._one_hot_y, logits=self._logits)
         self._loss_operation = tf.reduce_mean(self._cross_entropy + beta * reg_term)
         self._training_operation = self._optimizer.minimize(self._loss_operation)
 
+        #
+        # Evaluation pipeline
+        #
         # correct prediction for evaluation
         self._correct_prediction = tf.equal(tf.argmax(self._logits, 1), tf.argmax(self._one_hot_y, 1))
         self._accuracy_operation = tf.reduce_mean(tf.cast(self._correct_prediction, tf.float32))
         self._saver = tf.train.Saver()
 
     def __repr__(self):
-        return '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' % (self._X, self._conv1, self._conv2, self._conv3, self._fc0, self._fc1, self._fc2, self._fc3)
+        return '%s\n%s\n%s\n%s\n%s\n' % (self._X, self._conv1, self._conv2, self._fc0, self._fc1)

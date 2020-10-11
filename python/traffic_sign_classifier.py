@@ -9,6 +9,7 @@ from IPython import embed
 import numpy as np
 import matplotlib.pyplot as plt
 from model import LeNet5, MyNet
+import utils
 
 
 def _compute_output_size(input_size, kernal_size, padding_size, stride):
@@ -20,6 +21,28 @@ def read_data(datadir):
     for filename in ['train', 'valid', 'test']:
         with open(os.path.join(datadir, filename + '.p'), 'rb') as f:
             data[filename] = pickle.load(f)
+    
+    X_train = data['train']['features']
+    y_train = data['train']['labels']
+
+    from collections import Counter 
+    count = Counter(y_train)
+
+    target_num_image = count.most_common(1)[0][1] * 0.5
+    new_X_train = np.empty(shape=(0, *X_train.shape[1:]), dtype=X_train.dtype)
+    new_y_train = np.empty(shape=(0, ), dtype=y_train.dtype)
+    for k, v in count.items():
+        X_train_ = X_train[y_train == k]
+        y_train_ = y_train[y_train == k]
+        if v < target_num_image:
+            print('Augmenting label=%d, count=%d, target_num_image=%d ...' % (k, v, target_num_image))
+            X_train_, y_train_ = utils.augment_data(X_train_, y_train_, target_num_image)
+        new_X_train = np.append(new_X_train, X_train_, axis=0)
+        new_y_train = np.append(new_y_train, y_train_, axis=0)
+    
+    data['train']['features'] = np.array(new_X_train)
+    data['train']['labels'] = np.array(new_y_train)
+
     return data
 
 
@@ -46,6 +69,8 @@ def test(data, net):
             result_table.add_row([i, len(y_valid), np.round(accuracy, 3)])
             accuracies.append(accuracy)
         print(result_table)
+
+    print('Mean accuracies' % np.mean(accuracies))
     return accuracies
 
 
@@ -53,28 +78,32 @@ def _analyze_training_data(X, y):
     num_labels = y.ptp() + 1 - y.min()
     all_cnt = np.zeros(num_labels, dtype=np.uint32)
     for label in np.arange(y.min(), y.max() + 1):
-        all_cnt[label] = np.count_nonzero(y== label)
+        all_cnt[label] = np.count_nonzero(y == label)
 
 
 def _run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
 
+    print('Normalizing training data')
     X_train = batch_normalization(data['train']['features'])
     y_train = data['train']['labels']
 
+    print('Normalizing validation data')
     X_validation = batch_normalization(data['valid']['features'])
     y_validation = data['valid']['labels']
+
+    X_test = batch_normalization(data['test']['features'])
+    y_test = data['test']['labels']
 
     num_labels = y_train.ptp() + 1 - y_train.min()
 
     image_shape = X_train[0].shape
 
-    X_var = tf.placeholder(tf.float32, shape=(None, *image_shape))
-    y_var = tf.placeholder(tf.int32, shape=(None))
+    X_var = tf.placeholder(tf.float32, shape=(None, *image_shape), name='input_features')
+    y_var = tf.placeholder(tf.int32, shape=(None), name='input_labels')
 
     all_cnt = np.zeros(num_labels, dtype=np.uint32)
     for label in np.arange(y_train.min(), y_train.max() + 1):
         all_cnt[label] = np.count_nonzero(y_train == label)
-    _analyze_training_data(X_train, y_train)
 
     net = net_cls(X_var, y_var, num_labels)
 
@@ -98,8 +127,8 @@ def _run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
             validation_accuracy = net(session, X_validation, y_validation, 1.0, batch_size)
             if curr_accuracy is None:
                 curr_accuracy = validation_accuracy
-            elif curr_accuracy - validation_accuracy > 0.02:
-                print('accuracy droping more than 0.02, breaking training early at #epoch=%d' % i)
+            elif curr_accuracy - validation_accuracy > 0.05:
+                print('accuracy droping more than 0.05, breaking training early at #epoch=%d' % i)
                 break
             else:
                 curr_accuracy = validation_accuracy
@@ -111,13 +140,19 @@ def _run(data, net_cls, nepochs=10, learn_rate=0.001, batch_size=128):
 if __name__ == "__main__":
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
     tf.disable_v2_behavior()
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.allow_growth = True
+    session = tf.compat.v1.Session(config=config)
     parser = argparse.ArgumentParser()
-    parser.add_argument('--nepochs', type=int, dest='nepochs', default=10)
+    parser.add_argument('--nepochs', type=int, dest='nepochs', default=30)
     parser.add_argument('--learn-rate', type=float, dest='learn_rate', default=0.001)
     parser.add_argument('--batch-size', type=int, dest='batch_size', default=128)
-    parser.add_argument('--model', action='store_true', dest='model', default='MyNet')
+    parser.add_argument('--model', type=str, dest='model', default='MyNet')
 
     options = parser.parse_args()
+    embed()
 
     data = read_data(os.path.join(os.getcwd(), 'traffic_data'))
+    print('fnished read and preprocessing data')
+    embed()
     _run(data, getattr(sys.modules['model'], options.model), options.nepochs, options.learn_rate, options.batch_size)
