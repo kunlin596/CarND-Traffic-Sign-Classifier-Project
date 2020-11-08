@@ -158,6 +158,14 @@ Here are five German traffic signs that I found on the web:
 
 ![Normalized test image](./normalized_test_image.png)
 
+The difficulties for doing a right classification for open world traffic signs:
+
+1. Most images from the real world would be in perspective view, however, the training data are mostly close to orthographic image. As a result, the network might not be able to capture the geometric deformation of the signs.
+2. Similar to 1, the sign in the real image could be in different scale in the original image, even through we could transform (crop, rotate, morph, etc) them to have roughly the same scale, but after the transformation, the actual resolution of the pattern in the "transformed" image could be hard for network to capture the feature (meaning that the actual pattern could be changed to a totally different one or very blurry).
+3. The background is also challenging as well. The same sign under different context could result in a quite different confidence (if the data is preprocessed in a bad manner, the dominant pixels are not coming from the sign, but the background).
+4. High light on the pattern. the sign is most likely made of metal plate, and under certain viewing angle and illumination, the highlight could make the pattern invisibile to the camera and the network will have a hard time recognizing them.
+5. Different sensor parameters, it's hard to guarantee them in a sequence of video frame, the intensity of the pixels on the captured pattern could be very different. Since the signes are captured in the open world, illumination could change rapidly and drastically, and network could have a hard time recognize the sign under different exposure, etc.
+
 #### 2. Discuss the model's predictions on these new traffic signs and compare the results to predicting on the test set. At a minimum, discuss what the predictions were, the accuracy on these new predictions, and compare the accuracy to the accuracy on the test set (OPTIONAL: Discuss the results in more detail as described in the "Stand Out Suggestions" part of the rubric).
 
 Here are the results of the prediction:
@@ -171,6 +179,12 @@ Here are the results of the prediction:
 | Speed limit (20km/h) | Speed limit (20km/h) |
 
 The predictions on these 5 images are all correct.
+
+These traffic signs are coming from the same data set (but different sub-dataset), so the appearance of the pattern are relatively the same as the traning data, so I will be expecting a pretty high accuracy rate. 
+
+But as we can see, For the 1st sign, there are trees as background, which could add a lot of noises to the classification. As it's correct, I'm assuiming that there will be a low-pass filter feature map learned for filting the background noises.
+
+For the rest of the 4 signs, all of them has some strong features to learn, that is, the arrows, huge white pixels in the middle (low frequency pattern), and numbers.
 
 #### 3. Describe how certain the model is when predicting on each of the five new images by looking at the softmax probabilities for each prediction. Provide the top 5 softmax probabilities for each image along with the sign type of each probability. (OPTIONAL: as described in the "Stand Out Suggestions" part of the rubric, visualizations can also be provided such as bar charts)
 
